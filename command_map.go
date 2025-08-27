@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/jennevv/pokedexcli/internal"
 )
 
 type Response struct {
@@ -18,9 +21,28 @@ type Result struct {
 	Name string `json:"name"`
 }
 
-var LOCATION_URL string = "https://pokeapi.co/api/v2/location-area"
+const LOCATION_URL string = "https://pokeapi.co/api/v2/location-area"
 
 func commandMap(config *Config) error {
+	config.Cache.Mu.Lock()
+	if entry, ok := config.Cache.Entries[config.Next]; ok {
+		defer config.Cache.Mu.Unlock()
+
+		var response Response
+
+		err := json.Unmarshal(entry.Val, &response)
+		if err != nil {
+			return err
+		}
+		config.Next = response.Next
+		config.Previous = response.Previous
+
+		printMapNames(response)
+
+		return nil
+	}
+	config.Cache.Mu.Unlock()
+
 	if config.Next == "" {
 		config.Next = LOCATION_URL
 	}
@@ -36,6 +58,10 @@ func commandMap(config *Config) error {
 		return err
 	}
 
+	config.Cache.Mu.Lock()
+	config.Cache.Entries[config.Next] = internal.CacheEntry{CreatedAt: time.Now(), Val: body}
+	config.Cache.Mu.Unlock()
+
 	var response Response
 	err = json.Unmarshal(body, &response)
 	if err != nil {
@@ -50,6 +76,24 @@ func commandMap(config *Config) error {
 }
 
 func commandMapBack(config *Config) error {
+	config.Cache.Mu.Lock()
+	if entry, ok := config.Cache.Entries[config.Previous]; ok {
+		defer config.Cache.Mu.Unlock()
+		var response Response
+
+		err := json.Unmarshal(entry.Val, &response)
+		if err != nil {
+			return err
+		}
+		config.Next = response.Next
+		config.Previous = response.Previous
+
+		printMapNames(response)
+
+		return nil
+	}
+	config.Cache.Mu.Unlock()
+
 	if config.Previous == "" {
 		config.Previous = LOCATION_URL
 	}
@@ -64,6 +108,10 @@ func commandMapBack(config *Config) error {
 	if err != nil {
 		return err
 	}
+
+	config.Cache.Mu.Lock()
+	config.Cache.Entries[config.Previous] = internal.CacheEntry{CreatedAt: time.Now(), Val: body}
+	config.Cache.Mu.Unlock()
 
 	var response Response
 	err = json.Unmarshal(body, &response)

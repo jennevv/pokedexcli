@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/jennevv/pokedexcli/internal"
 )
 
 type Config struct {
 	Next     string
 	Previous string
+	Cache    internal.Cache
 }
 
 type cliCommand struct {
@@ -51,7 +55,7 @@ func cleanInput(text string) []string {
 
 func startRepl() {
 	scanner := bufio.NewScanner(os.Stdin)
-	config := Config{}
+	config := Config{Cache: *internal.NewCache(time.Duration(5 * time.Second))}
 
 	for {
 		fmt.Print("Pokedex > ")

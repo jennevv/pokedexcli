@@ -3,130 +3,91 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"time"
 
-	"github.com/jennevv/pokedexcli/internal"
+	"github.com/jennevv/pokedexcli/internal/pokeapi"
 )
-
-type Response struct {
-	Count    int      `json:"count"`
-	Next     string   `json:"next"`
-	Previous string   `json:"previous"`
-	Results  []Result `json:"results"`
-}
-
-type Result struct {
-	Name string `json:"name"`
-}
 
 const LOCATION_URL string = "https://pokeapi.co/api/v2/location-area"
 
-func commandMap(config *Config) error {
-	config.Cache.Mu.Lock()
-	if entry, ok := config.Cache.Entries[config.Next]; ok {
-		defer config.Cache.Mu.Unlock()
-
-		var response Response
-
-		err := json.Unmarshal(entry.Val, &response)
-		if err != nil {
-			return err
-		}
-		config.Next = response.Next
-		config.Previous = response.Previous
-
-		printMapNames(response)
-
-		return nil
-	}
-	config.Cache.Mu.Unlock()
-
+func commandMap(client *pokeapi.PokeClient, config *Config) error {
 	if config.Next == "" {
 		config.Next = LOCATION_URL
 	}
 
-	res, err := http.Get(config.Next)
+	var val []byte
+	var err error
+
+	if cachedVal, ok := config.Cache.Get(config.Next); ok {
+		val = cachedVal
+	} else {
+		val, err = client.Get(config.Next)
+		if err != nil {
+			return err
+		}
+	}
+
+	config.Cache.Add(config.Next, val)
+
+	response, err := client.Unmarshal(val)
 	if err != nil {
 		return err
 	}
 
-	body, err := io.ReadAll(res.Body)
-	defer res.Body.Close()
-	if err != nil {
-		return err
-	}
-
-	config.Cache.Mu.Lock()
-	config.Cache.Entries[config.Next] = internal.CacheEntry{CreatedAt: time.Now(), Val: body}
-	config.Cache.Mu.Unlock()
-
-	var response Response
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return err
-	}
-	config.Previous = response.Previous
-	config.Next = response.Next
+	config.UpdateNavigation(response)
 
 	printMapNames(response)
 
 	return nil
 }
 
-func commandMapBack(config *Config) error {
-	config.Cache.Mu.Lock()
-	if entry, ok := config.Cache.Entries[config.Previous]; ok {
-		defer config.Cache.Mu.Unlock()
-		var response Response
-
-		err := json.Unmarshal(entry.Val, &response)
-		if err != nil {
-			return err
-		}
-		config.Next = response.Next
-		config.Previous = response.Previous
-
-		printMapNames(response)
-
-		return nil
-	}
-	config.Cache.Mu.Unlock()
-
+func commandMapBack(client *pokeapi.PokeClient, config *Config) error {
 	if config.Previous == "" {
 		config.Previous = LOCATION_URL
 	}
 
-	res, err := http.Get(config.Previous)
+	var val []byte
+	var err error
+
+	if cachedVal, ok := config.Cache.Get(config.Previous); ok {
+		val = cachedVal
+	} else {
+		val, err = client.Get(config.Previous)
+		if err != nil {
+			return err
+		}
+	}
+
+	config.Cache.Add(config.Previous, val)
+
+	response, err := client.Unmarshal(val)
 	if err != nil {
 		return err
 	}
 
-	body, err := io.ReadAll(res.Body)
-	defer res.Body.Close()
-	if err != nil {
-		return err
-	}
-
-	config.Cache.Mu.Lock()
-	config.Cache.Entries[config.Previous] = internal.CacheEntry{CreatedAt: time.Now(), Val: body}
-	config.Cache.Mu.Unlock()
-
-	var response Response
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return err
-	}
-	config.Previous = response.Previous
-	config.Next = response.Next
+	config.UpdateNavigation(response)
 
 	printMapNames(response)
 
 	return nil
 }
 
-func printMapNames(response Response) {
+func setConfigFromResponse(config *Config, response pokeapi.Response) {
+	config.Next = response.Next
+	config.Previous = response.Previous
+}
+
+func unmarshalResponse(val []byte) (pokeapi.Response, error) {
+	var response pokeapi.Response
+
+	err := json.Unmarshal(val, &response)
+	if err != nil {
+		return pokeapi.Response{}, err
+	}
+
+	return response, nil
+}
+
+func printMapNames(response pokeapi.Response) {
 	for _, result := range response.Results {
 		fmt.Println(result.Name)
 	}

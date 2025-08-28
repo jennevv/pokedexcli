@@ -7,19 +7,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jennevv/pokedexcli/internal"
+	"github.com/jennevv/pokedexcli/internal/pokeapi"
+	"github.com/jennevv/pokedexcli/internal/pokecache"
 )
 
 type Config struct {
 	Next     string
 	Previous string
-	Cache    internal.Cache
+	Cache    pokecache.Cache
+}
+
+func (c *Config) UpdateNavigation(response pokeapi.Response) {
+	c.Next = response.Next
+	c.Previous = response.Previous
 }
 
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*Config) error
+	callback    func(*pokeapi.PokeClient, *Config) error
 }
 
 var commands map[string]cliCommand
@@ -55,7 +61,8 @@ func cleanInput(text string) []string {
 
 func startRepl() {
 	scanner := bufio.NewScanner(os.Stdin)
-	config := Config{Cache: *internal.NewCache(time.Duration(5 * time.Second))}
+	config := Config{Cache: *pokecache.NewCache(time.Duration(5 * time.Second))}
+	client := pokeapi.NewClient()
 
 	for {
 		fmt.Print("Pokedex > ")
@@ -70,7 +77,7 @@ func startRepl() {
 		firstWord := strings.ToLower(inputSlice[0])
 
 		if command, ok := commands[firstWord]; ok {
-			err := command.callback(&config)
+			err := command.callback(client, &config)
 			if err != nil {
 				fmt.Printf("error calling %s: %v", command.name, err)
 			}

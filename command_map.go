@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/jennevv/pokedexcli/internal/pokeapi"
@@ -69,22 +68,6 @@ func commandMapBack(client *pokeapi.PokeClient, config *Config) error {
 	printMapNames(response)
 
 	return nil
-}
-
-func setConfigFromResponse(config *Config, response pokeapi.Response) {
-	config.Next = response.Next
-	config.Previous = response.Previous
-}
-
-func unmarshalResponse(val []byte) (pokeapi.Response, error) {
-	var response pokeapi.Response
-
-	err := json.Unmarshal(val, &response)
-	if err != nil {
-		return pokeapi.Response{}, err
-	}
-
-	return response, nil
 }
 
 func printMapNames(response pokeapi.Response) {

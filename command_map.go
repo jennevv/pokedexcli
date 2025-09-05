@@ -1,16 +1,28 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/jennevv/pokedexcli/internal/pokeapi"
 )
 
-const LOCATION_URL string = "https://pokeapi.co/api/v2/location-area"
+const LocationURL string = "https://pokeapi.co/api/v2/location-area"
 
-func commandMap(client *pokeapi.PokeClient, config *Config) error {
+type LocationResponse struct {
+	Count    int      `json:"count"`
+	Next     string   `json:"next"`
+	Previous string   `json:"previous"`
+	Results  []Result `json:"results"`
+}
+
+type Result struct {
+	Name string `json:"name"`
+}
+
+func commandMap(client *pokeapi.PokeClient, config *Config, argument string) error {
 	if config.Next == "" {
-		config.Next = LOCATION_URL
+		config.Next = LocationURL
 	}
 
 	var val []byte
@@ -27,7 +39,8 @@ func commandMap(client *pokeapi.PokeClient, config *Config) error {
 
 	config.Cache.Add(config.Next, val)
 
-	response, err := client.Unmarshal(val)
+	var response LocationResponse
+	err = json.Unmarshal(val, &response)
 	if err != nil {
 		return err
 	}
@@ -39,9 +52,9 @@ func commandMap(client *pokeapi.PokeClient, config *Config) error {
 	return nil
 }
 
-func commandMapBack(client *pokeapi.PokeClient, config *Config) error {
+func commandMapBack(client *pokeapi.PokeClient, config *Config, argument string) error {
 	if config.Previous == "" {
-		config.Previous = LOCATION_URL
+		config.Previous = LocationURL
 	}
 
 	var val []byte
@@ -58,7 +71,8 @@ func commandMapBack(client *pokeapi.PokeClient, config *Config) error {
 
 	config.Cache.Add(config.Previous, val)
 
-	response, err := client.Unmarshal(val)
+	var response LocationResponse
+	err = json.Unmarshal(val, &response)
 	if err != nil {
 		return err
 	}
@@ -70,7 +84,7 @@ func commandMapBack(client *pokeapi.PokeClient, config *Config) error {
 	return nil
 }
 
-func printMapNames(response pokeapi.Response) {
+func printMapNames(response LocationResponse) {
 	for _, result := range response.Results {
 		fmt.Println(result.Name)
 	}

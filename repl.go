@@ -17,7 +17,7 @@ type Config struct {
 	Cache    pokecache.Cache
 }
 
-func (c *Config) UpdateNavigation(response pokeapi.Response) {
+func (c *Config) UpdateNavigation(response LocationResponse) {
 	c.Next = response.Next
 	c.Previous = response.Previous
 }
@@ -25,7 +25,7 @@ func (c *Config) UpdateNavigation(response pokeapi.Response) {
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*pokeapi.PokeClient, *Config) error
+	callback    func(*pokeapi.PokeClient, *Config, string) error
 }
 
 var commands map[string]cliCommand
@@ -52,6 +52,11 @@ func init() {
 			description: "Show the 20 next locations",
 			callback:    commandMapBack,
 		},
+		"explore": {
+			name:        "explore",
+			description: "Explore the given location",
+			callback:    commandExplore,
+		},
 	}
 }
 
@@ -74,12 +79,19 @@ func startRepl() {
 		input := scanner.Text()
 		inputSlice := cleanInput(input)
 
-		firstWord := strings.ToLower(inputSlice[0])
+		command := strings.ToLower(inputSlice[0])
 
-		if command, ok := commands[firstWord]; ok {
-			err := command.callback(client, &config)
+		var argument string
+		if len(inputSlice) > 1 {
+			argument = strings.ToLower(inputSlice[1])
+		} else {
+			argument = ""
+		}
+
+		if c, ok := commands[command]; ok {
+			err := c.callback(client, &config, argument)
 			if err != nil {
-				fmt.Printf("error calling %s: %v", command.name, err)
+				fmt.Printf("error calling %s: %v", c.name, err)
 			}
 		} else {
 			fmt.Println("Unknown command")

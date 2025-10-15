@@ -49,7 +49,7 @@ func init() {
 		},
 		"mapb": {
 			name:        "mapb",
-			description: "Show the 20 next locations",
+			description: "Show the 20 previous locations",
 			callback:    commandMapBack,
 		},
 		"explore": {

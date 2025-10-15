@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"slices"
 
@@ -168,4 +169,69 @@ func printPokemonNames(response ExploreResponse) {
 		pokemonName := encounter.Pokemon.Name
 		fmt.Println(pokemonName)
 	}
+}
+
+const PokemonURL string = "https://pokeapi.co/api/v2/pokemon/"
+
+type PokemonResponse struct {
+	BaseExperience int             `json:"base_experience"`
+	Height         int             `json:"height"`
+	Weight         int             `json:"weight"`
+	Stats          []StatsResponse `json:"stats"`
+	Types          []TypeResponse  `json:"types"`
+}
+
+type StatsResponse struct {
+	BaseStat int          `json:"base_stat"`
+	Stat     StatResponse `json:"stat"`
+}
+
+type StatResponse struct {
+	Name string `json:"name"`
+}
+
+type TypesResponse struct {
+	Type TypeResponse `json:"type"`
+}
+
+type TypeResponse struct {
+	Name string `json:"name"`
+}
+
+func commandCatch(client pokeapi.PokeClient, config *Config, pokemon string) error {
+	fmt.Printf("Throwing a ball at %s...\n", pokemon)
+
+	var val []byte
+	var err error
+
+	if cachedVal, ok := config.Cache.Get(PokemonURL + pokemon); ok {
+		val = cachedVal
+	} else {
+		val, err = client.Get(PokemonURL + pokemon)
+		if err != nil {
+			return err
+		}
+
+		config.Cache.Add(PokemonURL+pokemon, val)
+	}
+
+	var response PokemonResponse
+	err = json.Unmarshal(val, &response)
+	if err != nil {
+		return err
+	}
+
+	r := rand.New(rand.NewSource(42))
+
+	if catchRate(response.BaseExperience) > r.Float32() {
+		fmt.Printf("%s was caught!", pokemon)
+	}
+
+	return err
+}
+
+func catchRate(baseExperience int) float32 {
+	// Max base experience is Chanseys: 635
+	// Smallest possible catch rate is 1%
+	return 1.01 - float32(baseExperience)/635
 }

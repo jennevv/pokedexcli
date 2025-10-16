@@ -212,11 +212,13 @@ type PokemonType struct {
 	Name string `json:"name"`
 }
 
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 func commandCatch(client *pokeapi.PokeClient, config *Config, pokemon string) error {
 	if len(pokemon) == 0 {
 		return errors.New("no pokemon specified")
 	}
-	fmt.Printf("Throwing a ball at %s...\n", pokemon)
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemon)
 
 	var val []byte
 	var err error
@@ -238,10 +240,7 @@ func commandCatch(client *pokeapi.PokeClient, config *Config, pokemon string) er
 		return err
 	}
 
-	// TODO: fix random num generator
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	if catchRate(response.BaseExperience) > r.Float32() {
+	if catchRate(response.BaseExperience) > rng.Float32() {
 		fmt.Printf("%s was caught!\n", pokemon)
 		addToPokedex(config.Pokedex, pokemon, response)
 	} else {
@@ -254,8 +253,7 @@ func commandCatch(client *pokeapi.PokeClient, config *Config, pokemon string) er
 func catchRate(baseExperience int) float32 {
 	// Max base experience is Chanseys: 635
 	// Smallest possible catch rate is 0.1%
-	fmt.Printf("catch rate: %f", 1.0-float32(baseExperience)/635+0.001)
-	return 1.0 - float32(baseExperience)/635 + 0.001
+	return 1.0 - float32(baseExperience)/395 + 0.001
 }
 
 func addToPokedex(pokedex map[string]Pokemon, pokemonKey string, pokemonResponse PokemonResponse) {
@@ -315,4 +313,15 @@ func printPokemonInfo(pokemonInfo Pokemon) {
 	for _, t := range pokemonInfo.Types {
 		fmt.Printf("%4s- %s\n", "", t)
 	}
+}
+
+func commandPokedex(client *pokeapi.PokeClient, config *Config, argument string) error {
+	if len(config.Pokedex) == 0 {
+		fmt.Println("Your Pokedex is empty.")
+	} else {
+		for _, pokemon := range config.Pokedex {
+			fmt.Printf("%4s- %s\n", "", pokemon.Name)
+		}
+	}
+	return nil
 }

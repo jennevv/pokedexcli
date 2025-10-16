@@ -7,22 +7,29 @@ import (
 	"math/rand"
 	"os"
 	"slices"
+	"time"
 
 	"github.com/jennevv/pokedexcli/internal/pokeapi"
 )
 
 func commandHelp(client *pokeapi.PokeClient, config *Config, argument string) error {
-	fmt.Println("Welcome to the Pokedex!\n")
+	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Commands:")
 
 	var commandKeys []string
 
 	for key := range commands {
+		if key == "help" {
+			continue
+		}
 		commandKeys = append(commandKeys, key)
 	}
 
-	slices.Sort(commandKeys)
+	// Print help command first
+	fmt.Printf("%8s  %s\n", commands["help"].name, commands["help"].description)
 
+	// Print commands alphabetically
+	slices.Sort(commandKeys)
 	for _, key := range commandKeys {
 		command := commands[key]
 		fmt.Printf("%8s  %s\n", command.name, command.description)
@@ -124,17 +131,17 @@ type ExploreResponse struct {
 }
 
 type Encounter struct {
-	Pokemon Pokemon `json:"pokemon"`
+	Pokemon EncounterPokemon `json:"pokemon"`
 }
 
-type Pokemon struct {
+type EncounterPokemon struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
 }
 
 func commandExplore(client *pokeapi.PokeClient, config *Config, location string) error {
 	if len(location) == 0 {
-		return errors.New("no location provided\n")
+		return errors.New("no location provided")
 	}
 
 	locationURL := LocationURL + "/" + location
@@ -174,31 +181,41 @@ func printPokemonNames(response ExploreResponse) {
 const PokemonURL string = "https://pokeapi.co/api/v2/pokemon/"
 
 type PokemonResponse struct {
-	BaseExperience int             `json:"base_experience"`
-	Height         int             `json:"height"`
-	Weight         int             `json:"weight"`
-	Stats          []StatsResponse `json:"stats"`
-	Types          []TypeResponse  `json:"types"`
+	ID             int            `json:"id"`
+	Name           string         `json:"name"`
+	BaseExperience int            `json:"base_experience"`
+	Height         int            `json:"height"`
+	Weight         int            `json:"weight"`
+	Species        PokemonSpecies `json:"species"`
+	Stats          []PokemonStats `json:"stats"`
+	Types          []PokemonTypes `json:"types"`
 }
 
-type StatsResponse struct {
-	BaseStat int          `json:"base_stat"`
-	Stat     StatResponse `json:"stat"`
-}
-
-type StatResponse struct {
+type PokemonSpecies struct {
 	Name string `json:"name"`
 }
 
-type TypesResponse struct {
-	Type TypeResponse `json:"type"`
+type PokemonStats struct {
+	BaseStat int         `json:"base_stat"`
+	Stat     PokemonStat `json:"stat"`
 }
 
-type TypeResponse struct {
+type PokemonStat struct {
 	Name string `json:"name"`
 }
 
-func commandCatch(client pokeapi.PokeClient, config *Config, pokemon string) error {
+type PokemonTypes struct {
+	Type PokemonType `json:"type"`
+}
+
+type PokemonType struct {
+	Name string `json:"name"`
+}
+
+func commandCatch(client *pokeapi.PokeClient, config *Config, pokemon string) error {
+	if len(pokemon) == 0 {
+		return errors.New("no pokemon specified")
+	}
 	fmt.Printf("Throwing a ball at %s...\n", pokemon)
 
 	var val []byte
@@ -221,10 +238,14 @@ func commandCatch(client pokeapi.PokeClient, config *Config, pokemon string) err
 		return err
 	}
 
-	r := rand.New(rand.NewSource(42))
+	// TODO: fix random num generator
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	if catchRate(response.BaseExperience) > r.Float32() {
-		fmt.Printf("%s was caught!", pokemon)
+		fmt.Printf("%s was caught!\n", pokemon)
+		addToPokedex(config.Pokedex, pokemon, response)
+	} else {
+		fmt.Printf("%s escaped!\n", pokemon)
 	}
 
 	return err
@@ -232,6 +253,66 @@ func commandCatch(client pokeapi.PokeClient, config *Config, pokemon string) err
 
 func catchRate(baseExperience int) float32 {
 	// Max base experience is Chanseys: 635
-	// Smallest possible catch rate is 1%
-	return 1.01 - float32(baseExperience)/635
+	// Smallest possible catch rate is 0.1%
+	fmt.Printf("catch rate: %f", 1.0-float32(baseExperience)/635+0.001)
+	return 1.0 - float32(baseExperience)/635 + 0.001
+}
+
+func addToPokedex(pokedex map[string]Pokemon, pokemonKey string, pokemonResponse PokemonResponse) {
+	// pokemon already caught and in pokedex
+	if _, ok := pokedex[pokemonKey]; ok {
+		pokemon := pokedex[pokemonKey]
+		pokemon.NumberCaught++
+		pokedex[pokemonKey] = pokemon
+		return
+	}
+
+	var types []string
+	stats := make(map[string]int)
+
+	for _, typeInfo := range pokemonResponse.Types {
+		types = append(types, typeInfo.Type.Name)
+	}
+
+	for _, statInfo := range pokemonResponse.Stats {
+		stats[statInfo.Stat.Name] = statInfo.BaseStat
+	}
+
+	pokedex[pokemonKey] = Pokemon{
+		PokedexNo:    pokemonResponse.ID,
+		Name:         pokemonResponse.Name,
+		Species:      pokemonResponse.Species.Name,
+		Types:        types,
+		Stats:        stats,
+		Height:       pokemonResponse.Height,
+		Weight:       pokemonResponse.Weight,
+		NumberCaught: 1,
+	}
+}
+
+func commandInspect(client *pokeapi.PokeClient, config *Config, pokemon string) error {
+	if len(pokemon) == 0 {
+		return errors.New("no pokemon specified")
+	}
+
+	if pokemonInfo, ok := config.Pokedex[pokemon]; !ok {
+		fmt.Println("you have not caught that pokemon")
+	} else {
+		printPokemonInfo(pokemonInfo)
+	}
+	return nil
+}
+
+func printPokemonInfo(pokemonInfo Pokemon) {
+	fmt.Printf("Name: %s\n", pokemonInfo.Name)
+	fmt.Printf("Height: %d cm\n", pokemonInfo.Height*10)
+	fmt.Printf("Weight: %.1f kg\n", float32(pokemonInfo.Weight)/10.0)
+	fmt.Println("Stats:")
+	for s, statVal := range pokemonInfo.Stats {
+		fmt.Printf("%4s- %s: %d\n", "", s, statVal)
+	}
+	fmt.Println("Types:")
+	for _, t := range pokemonInfo.Types {
+		fmt.Printf("%4s- %s\n", "", t)
+	}
 }

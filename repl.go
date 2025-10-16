@@ -15,6 +15,18 @@ type Config struct {
 	Next     string
 	Previous string
 	Cache    pokecache.Cache
+	Pokedex  map[string]Pokemon
+}
+
+type Pokemon struct {
+	PokedexNo    int
+	Name         string
+	Species      string
+	Types        []string
+	Stats        map[string]int
+	Height       int
+	Weight       int
+	NumberCaught int
 }
 
 func (c *Config) UpdateNavigation(response LocationResponse) {
@@ -34,7 +46,7 @@ func init() {
 	commands = map[string]cliCommand{
 		"help": {
 			name:        "help",
-			description: "Displays a help message",
+			description: "Displays this help message",
 			callback:    commandHelp,
 		},
 		"exit": {
@@ -57,6 +69,16 @@ func init() {
 			description: "Explore the given location",
 			callback:    commandExplore,
 		},
+		"catch": {
+			name:        "catch",
+			description: "Attempt to catch the given pokemon",
+			callback:    commandCatch,
+		},
+		"inspect": {
+			name:        "inspect",
+			description: "Inspect a caught pokemon",
+			callback:    commandInspect,
+		},
 	}
 }
 
@@ -66,7 +88,10 @@ func cleanInput(text string) []string {
 
 func startRepl() {
 	scanner := bufio.NewScanner(os.Stdin)
-	config := Config{Cache: *pokecache.NewCache(time.Duration(5 * time.Second))}
+	config := Config{
+		Cache:   *pokecache.NewCache(time.Duration(5 * time.Second)),
+		Pokedex: make(map[string]Pokemon),
+	}
 	client := pokeapi.NewClient()
 
 	for {
@@ -79,7 +104,12 @@ func startRepl() {
 		input := scanner.Text()
 		inputSlice := cleanInput(input)
 
-		command := strings.ToLower(inputSlice[0])
+		var command string
+		if len(inputSlice) == 0 {
+			command = "help"
+		} else {
+			command = strings.ToLower(inputSlice[0])
+		}
 
 		var argument string
 		if len(inputSlice) > 1 {
@@ -91,7 +121,7 @@ func startRepl() {
 		if c, ok := commands[command]; ok {
 			err := c.callback(client, &config, argument)
 			if err != nil {
-				fmt.Printf("error calling %s: %v", c.name, err)
+				fmt.Printf("error calling %s: %v\n", c.name, err)
 			}
 		} else {
 			fmt.Println("Unknown command")
